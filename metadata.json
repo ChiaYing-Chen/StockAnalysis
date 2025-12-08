@@ -1,0 +1,5 @@
+{
+  "name": "Elliott Wave Pro Calculator",
+  "description": "A professional-grade Elliott Wave calculator for stock market technical analysis. Inputs wave 1 and 2 data points to project wave 3, 4, and 5 targets using Fibonacci ratios.",
+  "requestFramePermissions": []
+}
