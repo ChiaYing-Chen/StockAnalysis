@@ -94,7 +94,7 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
       minPrice: 0, maxPrice: 100, maxVol: 0,
       xScale: (i: number) => i, yScale: (p: number) => p,
       candleWidth: 10, viewHighPoint: null, viewLowPoint: null,
-      yAxisTicks: [], visibleData: [], maPoints: [], volMaPoints: []
+      yAxisTicks: [], visibleData: [], maPoints: "", volMaPoints: ""
     };
 
     let min = Infinity;
