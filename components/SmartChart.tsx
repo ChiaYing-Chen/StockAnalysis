@@ -1,15 +1,17 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
-import { CandleData, ChartPoint } from '../types';
-import { MousePointer2, Trash2, Loader2, Undo2, X, CheckCircle2, Settings2, History, Zap, Activity, RefreshCw } from 'lucide-react';
+import { CandleData, ChartPoint, Interval } from '../types';
+import { MousePointer2, Trash2, Loader2, Undo2, X, CheckCircle2, Settings2, History, Zap, Activity, RefreshCw, ZoomIn, ZoomOut, CalendarDays } from 'lucide-react';
 
 interface SmartChartProps {
   data: CandleData[];
   symbol: string;
+  interval: Interval;
+  onIntervalChange: (interval: Interval) => void;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
 }
 
-const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMore, isLoadingMore }) => {
+const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval, onIntervalChange, onLoadMore, isLoadingMore }) => {
   const [points, setPoints] = useState<ChartPoint[]>([]);
   const [selection, setSelection] = useState<number | null>(null);
   const [fibRatio, setFibRatio] = useState<0.382 | 0.5 | 0.618>(0.382);
@@ -35,10 +37,7 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartOffset, setDragStartOffset] = useState(0);
 
-  // Pinch Zoom State
-  const [isPinching, setIsPinching] = useState(false);
-  const [pinchStartDist, setPinchStartDist] = useState(0);
-  const [pinchStartZoom, setPinchStartZoom] = useState(60);
+
 
   // Price Scale State
   const [priceScale, setPriceScale] = useState(1.0);
@@ -281,7 +280,7 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
       maPoints: maPointsString,
       volMaPoints: volMaPointsString
     };
-  }, [data, effectiveOffset, zoom, visibleStartIndex, visibleEndIndex, FUTURE_BARS, volMALength, granvilleEnabled, maLength]);
+  }, [data, effectiveOffset, zoom, visibleStartIndex, visibleEndIndex, FUTURE_BARS, volMALength, granvilleEnabled, maLength, priceScale]);
 
   // --- Handlers ---
   const applyGranvilleSettings = () => {
@@ -305,38 +304,16 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
   };
 
   const startDrag = (e: React.MouseEvent | React.TouchEvent) => {
-    if ('touches' in e && e.touches.length === 2) {
-      setIsDragging(false);
-      setIsPinching(true);
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      setPinchStartDist(dist);
-      setPinchStartZoom(zoom);
-      return;
-    }
+    // Zoom logic removed for touch devices as requested
+    // if ('touches' in e && e.touches.length === 2) { return; }
 
-    setIsDragging(true);
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     setDragStartX(clientX);
     setDragStartOffset(offset);
   };
 
   const onDrag = useCallback((e: MouseEvent | TouchEvent) => {
-    if (isPinching && 'touches' in e && e.touches.length === 2) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-
-      if (pinchStartDist > 0) {
-        const scale = pinchStartDist / dist;
-        const newZoom = pinchStartZoom * scale;
-        setZoom(Math.min(Math.max(15, newZoom), 300));
-      }
-      return;
-    }
+    // Zoom logic removed for touch devices as requested
 
     if (!isDragging) return;
 
@@ -360,11 +337,11 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
     }
 
     setOffset(newOffset);
-  }, [isDragging, isPinching, dragStartX, dragStartOffset, zoom, data.length, onLoadMore, isLoadingMore, pinchStartDist, pinchStartZoom]);
+  }, [isDragging, dragStartX, dragStartOffset, zoom, data.length, onLoadMore, isLoadingMore]);
 
   const stopDrag = () => {
     setIsDragging(false);
-    setIsPinching(false);
+    // setIsPinching(false);
   };
 
   useEffect(() => {
@@ -381,7 +358,7 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
   }, [onDrag]);
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (isDragging || isPinching) return;
+    if (isDragging) return;
     if (!svgRef.current || data.length === 0) return;
 
     const rect = svgRef.current.getBoundingClientRect();
@@ -571,13 +548,29 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
         <div className="flex items-center gap-2 md:gap-4 flex-wrap">
           {/* Granville Settings */}
           <div className="relative">
+            {/* Timeframe Buttons */}
+            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 mr-2">
+              {(['1d', '1wk', '1mo'] as Interval[]).map((int) => (
+                <button
+                  key={int}
+                  onClick={() => onIntervalChange(int)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${interval === int
+                    ? 'bg-finance-accent text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                    }`}
+                >
+                  {int === '1d' ? '日' : int === '1wk' ? '週' : '月'}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={() => setShowGranvilleSettings(!showGranvilleSettings)}
               className={`flex items-center gap-1 text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border ${granvilleEnabled ? 'border-yellow-500 text-yellow-500' : 'border-slate-700 text-slate-400'}`}
               title="葛蘭碧八大法則"
             >
               <Activity className={`w-3 h-3 ${granvilleEnabled ? 'stroke-yellow-500' : ''}`} />
-              <span className="hidden sm:inline">G-8 法則</span>
+              <span className="hidden sm:inline">G-8</span>
             </button>
 
             {showGranvilleSettings && (
@@ -725,372 +718,399 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
           )}
         </div>
 
-        {/* Price Scale Controls */}
-        <div className="flex flex-col gap-1 absolute right-2 top-16 z-20">
-          <button
-            onClick={() => setPriceScale(s => Math.min(s * 1.1, 5))}
-            className="w-6 h-6 flex items-center justify-center bg-slate-800 border border-slate-700 rounded text-slate-400 hover:text-white"
-            title="拉長 K 線 (價格放大)"
-          >
-            +
-          </button>
-          <button
-            onClick={() => setPriceScale(1.0)}
-            className="w-6 h-6 flex items-center justify-center bg-slate-800 border border-slate-700 rounded text-xs text-slate-400 hover:text-white"
-            title="重置價格比例"
-          >
-            1x
-          </button>
-          <button
-            onClick={() => setPriceScale(s => Math.max(s * 0.9, 0.2))}
-            className="w-6 h-6 flex items-center justify-center bg-slate-800 border border-slate-700 rounded text-slate-400 hover:text-white"
-            title="壓縮 K 線 (價格縮小)"
-          >
-            -
-          </button>
-        </div>
       </div>
 
-      <div
-        className={`relative w-full h-[500px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden select-none shadow-2xl ${isDragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
-        style={{ touchAction: 'none' }}
-        onWheel={handleWheel}
-        onMouseDown={startDrag}
-        onTouchStart={startDrag}
-      >
-        {isLoadingMore && (
-          <div className="absolute left-4 top-4 z-10 flex items-center gap-2 bg-slate-800 text-white text-xs px-3 py-1 rounded shadow-lg animate-pulse border border-slate-700">
-            <Loader2 className="w-3 h-3 animate-spin" /> 讀取歷史資料...
-          </div>
-        )}
-
-        {/* Selection Overlay */}
-        {selectionData && (
-          <div className="absolute top-16 left-4 z-20 w-56 bg-slate-800/95 backdrop-blur-md border border-slate-600 shadow-2xl rounded-xl p-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-start mb-3 border-b border-slate-700 pb-2">
-              <div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">選取日期</div>
-                <div className="text-sm font-bold text-white font-mono">{selectionData.date}</div>
-              </div>
-              <button onClick={() => setSelection(null)} className="text-slate-400 hover:text-white transition-colors">
-                <X className="w-4 h-4" />
-              </button>
+      {/* Chart Container & Right Controls */}
+      <div className="flex gap-2 relative">
+        {/* Main Chart */}
+        <div
+          className={`relative flex-1 h-[500px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden select-none shadow-2xl ${isDragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+          style={{ touchAction: 'none' }}
+          onWheel={handleWheel}
+          onMouseDown={startDrag}
+          onTouchStart={startDrag}
+        >
+          {isLoadingMore && (
+            <div className="absolute left-4 top-4 z-10 flex items-center gap-2 bg-slate-800 text-white text-xs px-3 py-1 rounded shadow-lg animate-pulse border border-slate-700">
+              <Loader2 className="w-3 h-3 animate-spin" /> 讀取歷史資料...
             </div>
+          )}
 
-            <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-xs mb-4 font-mono">
-              <div className="flex justify-between"><span className="text-slate-500">開盤</span> <span className="text-slate-300">{selectionData.open.toFixed(1)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">最高</span> <span className="text-finance-up">{selectionData.high.toFixed(1)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">最低</span> <span className="text-finance-down">{selectionData.low.toFixed(1)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">收盤</span> <span className="text-slate-300">{selectionData.close.toFixed(1)}</span></div>
-              <div className="col-span-2 border-t border-slate-700 my-1"></div>
-              <div className="flex justify-between"><span className="text-slate-500">成交量</span> <span className="text-slate-300">{Math.round(selectionData.volume).toLocaleString()}</span></div>
-              {volAlertEnabled && selectionData.volMA !== null && selectionData.volMA !== undefined && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">均量({volMALength})</span>
-                  <span className="text-amber-500">{Math.round(selectionData.volMA).toLocaleString()}</span>
+          {/* Selection Overlay */}
+          {selectionData && (
+            <div className="absolute top-16 left-4 z-20 w-56 bg-slate-800/95 backdrop-blur-md border border-slate-600 shadow-2xl rounded-xl p-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-start mb-3 border-b border-slate-700 pb-2">
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">選取日期</div>
+                  <div className="text-sm font-bold text-white font-mono">{selectionData.date}</div>
+                </div>
+                <button onClick={() => setSelection(null)} className="text-slate-400 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-xs mb-4 font-mono">
+                <div className="flex justify-between"><span className="text-slate-500">開盤</span> <span className="text-slate-300">{selectionData.open.toFixed(1)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">最高</span> <span className="text-finance-up">{selectionData.high.toFixed(1)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">最低</span> <span className="text-finance-down">{selectionData.low.toFixed(1)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">收盤</span> <span className="text-slate-300">{selectionData.close.toFixed(1)}</span></div>
+                <div className="col-span-2 border-t border-slate-700 my-1"></div>
+                <div className="flex justify-between"><span className="text-slate-500">成交量</span> <span className="text-slate-300">{Math.round(selectionData.volume).toLocaleString()}</span></div>
+                {volAlertEnabled && selectionData.volMA !== null && selectionData.volMA !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">均量({volMALength})</span>
+                    <span className="text-amber-500">{Math.round(selectionData.volMA).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {getNextPointType() ? (
+                <button
+                  onClick={confirmSetPoint}
+                  className="w-full bg-finance-accent hover:bg-blue-600 text-white text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {getNextPointType()!.fullLabel}
+                </button>
+              ) : (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center py-2 rounded-lg">
+                  設定完成
                 </div>
               )}
             </div>
-
-            {getNextPointType() ? (
-              <button
-                onClick={confirmSetPoint}
-                className="w-full bg-finance-accent hover:bg-blue-600 text-white text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {getNextPointType()!.fullLabel}
-              </button>
-            ) : (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center py-2 rounded-lg">
-                設定完成
-              </div>
-            )}
-          </div>
-        )}
-
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="100%"
-          viewBox="0 0 1000 500"
-          preserveAspectRatio="none"
-          onClick={handleSvgClick}
-        >
-          {/* Horizontal Grid */}
-          {yAxisTicks.map((tick, i) => (
-            <line key={`grid-${i}`} x1="0" y1={yScale(tick)} x2="1000" y2={yScale(tick)} stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-          ))}
-
-          {/* Fibonacci Time Zones */}
-          {fibTimeLines.map((line, i) => (
-            <g key={`fib-time-${i}`}>
-              <line
-                x1={line.x + candleWidth / 2}
-                y1="0"
-                x2={line.x + candleWidth / 2}
-                y2="500"
-                stroke="#f59e0b"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-                opacity="0.5"
-              />
-              <text
-                x={line.x + candleWidth / 2 + 2}
-                y="12"
-                className="fill-yellow-500 font-mono text-[9px] select-none"
-                style={{ fontSize: '9px' }}
-              >
-                T+{line.num}
-              </text>
-            </g>
-          ))}
-
-          {/* Volume */}
-          {visibleCandlesRender.map((c) => (
-            <rect
-              key={`vol-${c.date}`}
-              x={c.x}
-              y={500 - c.volHeight}
-              width={Math.max(1, candleWidth - 1)}
-              height={c.volHeight}
-              fill={volAlertEnabled && c.isVolAnomaly ? '#fbbf24' : c.color}
-              fillOpacity={volAlertEnabled && c.isVolAnomaly ? 1 : 0.8}
-            />
-          ))}
-
-          {/* Volume MA Line */}
-          {volAlertEnabled && volMaPoints.length > 0 && (
-            <polyline
-              points={volMaPoints}
-              fill="none"
-              stroke="#fbbf24"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-              opacity="0.7"
-            />
           )}
 
-          {/* MA Line for Granville */}
-          {granvilleEnabled && maPoints.length > 0 && (
-            <polyline
-              points={maPoints}
-              fill="none"
-              stroke="#fbbf24"
-              strokeWidth="1.5"
-              strokeOpacity="0.8"
-            />
-          )}
+          <svg
+            ref={svgRef}
+            width="100%"
+            height="100%"
+            viewBox="0 0 1000 500"
+            preserveAspectRatio="none"
+            onClick={handleSvgClick}
+          >
+            {/* Horizontal Grid */}
+            {yAxisTicks.map((tick, i) => (
+              <line key={`grid-${i}`} x1="0" y1={yScale(tick)} x2="1000" y2={yScale(tick)} stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+            ))}
 
-          {/* Candles */}
-          {visibleCandlesRender.map((c) => (
-            <g key={`candle-${c.date}`}>
-              <line x1={c.x + candleWidth / 2} y1={c.yHigh} x2={c.x + candleWidth / 2} y2={c.yLow} stroke={c.color} strokeWidth="1" />
-              <rect
-                x={c.x}
-                y={Math.min(c.yOpen, c.yClose)}
-                width={Math.max(1, candleWidth)}
-                height={Math.max(1, Math.abs(c.yClose - c.yOpen))}
-                fill={c.color}
-              />
-            </g>
-          ))}
-
-          {/* Granville Signals Markers */}
-          {granvilleEnabled && visibleCandlesRender.map((c) => {
-            if (!c.granvilleSignal) return null;
-            const isBuy = c.granvilleSignal.type === 'B';
-            const yPos = isBuy ? c.yLow + 15 : c.yHigh - 15;
-            const bgColor = isBuy ? '#ef4444' : '#10b981'; // TW Colors: Buy=Red, Sell=Green
-
-            return (
-              <g key={`g-signal-${c.date}`}>
-                <circle cx={c.x + candleWidth / 2} cy={yPos} r="5" fill={bgColor} />
+            {/* Fibonacci Time Zones */}
+            {fibTimeLines.map((line, i) => (
+              <g key={`fib-time-${i}`}>
+                <line
+                  x1={line.x + candleWidth / 2}
+                  y1="0"
+                  x2={line.x + candleWidth / 2}
+                  y2="500"
+                  stroke="#f59e0b"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.5"
+                />
                 <text
-                  x={c.x + candleWidth / 2}
-                  y={yPos + 3}
-                  textAnchor="middle"
-                  fill="white"
-                  fontSize="8px"
-                  fontWeight="bold"
+                  x={line.x + candleWidth / 2 + 2}
+                  y="12"
+                  className="fill-yellow-500 font-mono text-[9px] select-none"
+                  style={{ fontSize: '9px' }}
                 >
-                  {c.granvilleSignal.type}
+                  T+{line.num}
                 </text>
               </g>
-            );
-          })}
+            ))}
 
-          {/* Selection Crosshair */}
-          {selectionData && (
-            <g>
-              <line
-                x1={xScale(selectionData.index) + candleWidth / 2}
-                y1="0"
-                x2={xScale(selectionData.index) + candleWidth / 2}
-                y2="500"
-                stroke="white"
-                strokeWidth="1"
-                strokeDasharray="4 4"
-                opacity="0.5"
-              />
-              <line
-                x1="0"
-                y1={yScale(selectionData.close)}
-                x2="1000"
-                y2={yScale(selectionData.close)}
-                stroke="white"
-                strokeWidth="1"
-                strokeDasharray="4 4"
-                opacity="0.3"
-              />
+            {/* Volume */}
+            {visibleCandlesRender.map((c) => (
               <rect
-                x={xScale(selectionData.index) - 2}
-                y={0}
-                width={candleWidth + 4}
-                height={500}
-                fill="white"
-                fillOpacity="0.05"
+                key={`vol-${c.date}`}
+                x={c.x}
+                y={500 - c.volHeight}
+                width={Math.max(1, candleWidth - 1)}
+                height={c.volHeight}
+                fill={volAlertEnabled && c.isVolAnomaly ? '#fbbf24' : c.color}
+                fillOpacity={volAlertEnabled && c.isVolAnomaly ? 1 : 0.8}
               />
-            </g>
-          )}
+            ))}
 
-          {/* Visible High Marker */}
-          {viewHighPoint && (
-            <g>
-              <text
-                x={viewHighPoint.x}
-                y={viewHighPoint.y - 12}
-                textAnchor="middle"
-                className="font-mono text-xs font-bold fill-finance-text"
-                style={{ fontSize: '10px' }}
-              >
-                {viewHighPoint.price.toFixed(2)}
-              </text>
-              <line
-                x1={viewHighPoint.x}
-                y1={viewHighPoint.y - 8}
-                x2={viewHighPoint.x}
-                y2={viewHighPoint.y - 2}
-                stroke="#e2e8f0"
+            {/* Volume MA Line */}
+            {volAlertEnabled && volMaPoints.length > 0 && (
+              <polyline
+                points={volMaPoints}
+                fill="none"
+                stroke="#fbbf24"
                 strokeWidth="1"
+                strokeDasharray="2 2"
+                opacity="0.7"
               />
-            </g>
-          )}
+            )}
 
-          {/* Visible Low Marker */}
-          {viewLowPoint && (
-            <g>
-              <text
-                x={viewLowPoint.x}
-                y={viewLowPoint.y + 20}
-                textAnchor="middle"
-                className="font-mono text-xs font-bold fill-finance-text"
-                style={{ fontSize: '10px' }}
-              >
-                {viewLowPoint.price.toFixed(2)}
-              </text>
-              <line
-                x1={viewLowPoint.x}
-                y1={viewLowPoint.y + 2}
-                x2={viewLowPoint.x}
-                y2={viewLowPoint.y + 8}
-                stroke="#e2e8f0"
-                strokeWidth="1"
+            {/* MA Line for Granville */}
+            {granvilleEnabled && maPoints.length > 0 && (
+              <polyline
+                points={maPoints}
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth="1.5"
+                strokeOpacity="0.8"
               />
-            </g>
-          )}
+            )}
 
-          {/* Wave Lines & Labels */}
-          {mappedPoints.map((p, i) => {
-            if (i === 0) return null;
-            const prev = mappedPoints[i - 1];
-            const x1 = xScale(prev.index) + candleWidth / 2;
-            const y1 = yScale(prev.price);
-            const x2 = xScale(p.index) + candleWidth / 2;
-            const y2 = yScale(p.price);
-
-            const midX = (x1 + x2) / 2;
-            const midY = (y1 + y2) / 2;
-
-            return (
-              <g key={`wave-group-${i}`}>
-                <line
-                  x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="#3b82f6" strokeWidth="2"
+            {/* Candles */}
+            {visibleCandlesRender.map((c) => (
+              <g key={`candle-${c.date}`}>
+                <line x1={c.x + candleWidth / 2} y1={c.yHigh} x2={c.x + candleWidth / 2} y2={c.yLow} stroke={c.color} strokeWidth="1" />
+                <rect
+                  x={c.x}
+                  y={Math.min(c.yOpen, c.yClose)}
+                  width={Math.max(1, candleWidth)}
+                  height={Math.max(1, Math.abs(c.yClose - c.yOpen))}
+                  fill={c.color}
                 />
-                {/* Wave 1 Label */}
-                {i === 1 && waveStats.w1Change !== null && (
-                  <g>
-                    <rect x={midX - 25} y={midY - 9} width="50" height="18" rx="4" fill="#0f172a" stroke="#3b82f6" strokeWidth="0.5" fillOpacity="0.9" />
-                    <text x={midX} y={midY + 3} textAnchor="middle" className="fill-white font-bold text-[10px]" style={{ fontSize: '10px' }}>
-                      {waveStats.w1Change > 0 ? '+' : ''}{waveStats.w1Change.toFixed(1)}%
-                    </text>
-                  </g>
-                )}
-                {/* Wave 2 Label */}
-                {i === 2 && waveStats.w2Retrace !== null && (
-                  <g>
-                    <rect x={midX - 30} y={midY - 9} width="60" height="18" rx="4" fill="#0f172a" stroke="#f59e0b" strokeWidth="0.5" fillOpacity="0.9" />
-                    <text x={midX} y={midY + 3} textAnchor="middle" className="fill-white font-bold text-[10px]" style={{ fontSize: '10px' }}>
-                      回調 {waveStats.w2Retrace.toFixed(1)}%
-                    </text>
-                  </g>
-                )}
               </g>
-            );
-          })}
+            ))}
 
-          {/* Points Markers */}
-          {mappedPoints.map((p, i) => (
-            <g key={`pt-${i}`}>
-              <circle cx={xScale(p.index) + candleWidth / 2} cy={yScale(p.price)} r="4" fill="#0f172a" stroke="#3b82f6" strokeWidth="2" />
-              <text x={xScale(p.index)} y={yScale(p.price) - 10} textAnchor="middle" fill="white" className="text-xs font-bold" style={{ fontSize: '12px' }}>
-                {p.type.toUpperCase()}
-              </text>
-            </g>
-          ))}
+            {/* Granville Signals Markers */}
+            {granvilleEnabled && visibleCandlesRender.map((c) => {
+              if (!c.granvilleSignal) return null;
+              const isBuy = c.granvilleSignal.type === 'B';
+              const yPos = isBuy ? c.yLow + 15 : c.yHigh - 15;
+              const bgColor = isBuy ? '#ef4444' : '#10b981'; // TW Colors: Buy=Red, Sell=Green
 
-          {/* Projections */}
-          {projections && (
-            <g>
-              {projections.lines.map((line, i) => (
-                <line key={`proj-line-${i}`} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke="#10b981" strokeWidth="2" strokeDasharray="5 5" />
-              ))}
-              {[projections.p3, projections.p4, projections.p5].map((p, i) => (
-                <g key={`proj-pt-${i}`}>
-                  <circle cx={p.x} cy={p.y} r="4" fill="#0f172a" stroke="#10b981" strokeWidth="2" />
-                  <text x={p.x} y={p.y - 12} textAnchor="middle" className="fill-emerald-400 font-bold" style={{ fontSize: '12px' }}>P{3 + i}</text>
-                  <text x={p.x} y={p.y + 15} textAnchor="middle" className="fill-emerald-600" style={{ fontSize: '10px' }}>{p.price.toFixed(1)}</text>
+              return (
+                <g key={`g-signal-${c.date}`}>
+                  <circle cx={c.x + candleWidth / 2} cy={yPos} r="5" fill={bgColor} />
+                  <text
+                    x={c.x + candleWidth / 2}
+                    y={yPos + 3}
+                    textAnchor="middle"
+                    fill="white"
+                    fontSize="8px"
+                    fontWeight="bold"
+                  >
+                    {c.granvilleSignal.type}
+                  </text>
                 </g>
-              ))}
-            </g>
-          )}
+              );
+            })}
 
-          {/* Right Axis Labels */}
-          <rect x={1000 - RIGHT_AXIS_WIDTH} y="0" width={RIGHT_AXIS_WIDTH} height="500" fill="#0f172a" fillOpacity="0.8" />
-          <line x1={1000 - RIGHT_AXIS_WIDTH} y1="0" x2={1000 - RIGHT_AXIS_WIDTH} y2="500" stroke="#334155" strokeWidth="1" />
-          {yAxisTicks.map((tick, i) => (
-            <text
-              key={`tick-${i}`}
-              x={995}
-              y={yScale(tick) + 4}
-              textAnchor="end"
-              className="fill-slate-400 font-mono"
-              style={{ fontSize: '10px' }}
+            {/* Selection Crosshair */}
+            {selectionData && (
+              <g>
+                <line
+                  x1={xScale(selectionData.index) + candleWidth / 2}
+                  y1="0"
+                  x2={xScale(selectionData.index) + candleWidth / 2}
+                  y2="500"
+                  stroke="white"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                  opacity="0.5"
+                />
+                <line
+                  x1="0"
+                  y1={yScale(selectionData.close)}
+                  x2="1000"
+                  y2={yScale(selectionData.close)}
+                  stroke="white"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                  opacity="0.3"
+                />
+                <rect
+                  x={xScale(selectionData.index) - 2}
+                  y={0}
+                  width={candleWidth + 4}
+                  height={500}
+                  fill="white"
+                  fillOpacity="0.05"
+                />
+              </g>
+            )}
+
+            {/* Visible High Marker */}
+            {viewHighPoint && (
+              <g>
+                <text
+                  x={viewHighPoint.x}
+                  y={viewHighPoint.y - 12}
+                  textAnchor="middle"
+                  className="font-mono text-xs font-bold fill-finance-text"
+                  style={{ fontSize: '10px' }}
+                >
+                  {viewHighPoint.price.toFixed(2)}
+                </text>
+                <line
+                  x1={viewHighPoint.x}
+                  y1={viewHighPoint.y - 8}
+                  x2={viewHighPoint.x}
+                  y2={viewHighPoint.y - 2}
+                  stroke="#e2e8f0"
+                  strokeWidth="1"
+                />
+              </g>
+            )}
+
+            {/* Visible Low Marker */}
+            {viewLowPoint && (
+              <g>
+                <text
+                  x={viewLowPoint.x}
+                  y={viewLowPoint.y + 20}
+                  textAnchor="middle"
+                  className="font-mono text-xs font-bold fill-finance-text"
+                  style={{ fontSize: '10px' }}
+                >
+                  {viewLowPoint.price.toFixed(2)}
+                </text>
+                <line
+                  x1={viewLowPoint.x}
+                  y1={viewLowPoint.y + 2}
+                  x2={viewLowPoint.x}
+                  y2={viewLowPoint.y + 8}
+                  stroke="#e2e8f0"
+                  strokeWidth="1"
+                />
+              </g>
+            )}
+
+            {/* Wave Lines & Labels */}
+            {mappedPoints.map((p, i) => {
+              if (i === 0) return null;
+              const prev = mappedPoints[i - 1];
+              const x1 = xScale(prev.index) + candleWidth / 2;
+              const y1 = yScale(prev.price);
+              const x2 = xScale(p.index) + candleWidth / 2;
+              const y2 = yScale(p.price);
+
+              const midX = (x1 + x2) / 2;
+              const midY = (y1 + y2) / 2;
+
+              return (
+                <g key={`wave-group-${i}`}>
+                  <line
+                    x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke="#3b82f6" strokeWidth="2"
+                  />
+                  {/* Wave 1 Label */}
+                  {i === 1 && waveStats.w1Change !== null && (
+                    <g>
+                      <rect x={midX - 25} y={midY - 9} width="50" height="18" rx="4" fill="#0f172a" stroke="#3b82f6" strokeWidth="0.5" fillOpacity="0.9" />
+                      <text x={midX} y={midY + 3} textAnchor="middle" className="fill-white font-bold text-[10px]" style={{ fontSize: '10px' }}>
+                        {waveStats.w1Change > 0 ? '+' : ''}{waveStats.w1Change.toFixed(1)}%
+                      </text>
+                    </g>
+                  )}
+                  {/* Wave 2 Label */}
+                  {i === 2 && waveStats.w2Retrace !== null && (
+                    <g>
+                      <rect x={midX - 30} y={midY - 9} width="60" height="18" rx="4" fill="#0f172a" stroke="#f59e0b" strokeWidth="0.5" fillOpacity="0.9" />
+                      <text x={midX} y={midY + 3} textAnchor="middle" className="fill-white font-bold text-[10px]" style={{ fontSize: '10px' }}>
+                        回調 {waveStats.w2Retrace.toFixed(1)}%
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Points Markers */}
+            {mappedPoints.map((p, i) => (
+              <g key={`pt-${i}`}>
+                <circle cx={xScale(p.index) + candleWidth / 2} cy={yScale(p.price)} r="4" fill="#0f172a" stroke="#3b82f6" strokeWidth="2" />
+                <text x={xScale(p.index)} y={yScale(p.price) - 10} textAnchor="middle" fill="white" className="text-xs font-bold" style={{ fontSize: '12px' }}>
+                  {p.type.toUpperCase()}
+                </text>
+              </g>
+            ))}
+
+            {/* Projections */}
+            {projections && (
+              <g>
+                {projections.lines.map((line, i) => (
+                  <line key={`proj-line-${i}`} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke="#10b981" strokeWidth="2" strokeDasharray="5 5" />
+                ))}
+                {[projections.p3, projections.p4, projections.p5].map((p, i) => (
+                  <g key={`proj-pt-${i}`}>
+                    <circle cx={p.x} cy={p.y} r="4" fill="#0f172a" stroke="#10b981" strokeWidth="2" />
+                    <text x={p.x} y={p.y - 12} textAnchor="middle" className="fill-emerald-400 font-bold" style={{ fontSize: '12px' }}>P{3 + i}</text>
+                    <text x={p.x} y={p.y + 15} textAnchor="middle" className="fill-emerald-600" style={{ fontSize: '10px' }}>{p.price.toFixed(1)}</text>
+                  </g>
+                ))}
+              </g>
+            )}
+
+            {/* Right Axis Labels */}
+            <rect x={1000 - RIGHT_AXIS_WIDTH} y="0" width={RIGHT_AXIS_WIDTH} height="500" fill="#0f172a" fillOpacity="0.8" />
+            <line x1={1000 - RIGHT_AXIS_WIDTH} y1="0" x2={1000 - RIGHT_AXIS_WIDTH} y2="500" stroke="#334155" strokeWidth="1" />
+            {yAxisTicks.map((tick, i) => (
+              <text
+                key={`tick-${i}`}
+                x={995}
+                y={yScale(tick) + 4}
+                textAnchor="end"
+                className="fill-slate-400 font-mono"
+                style={{ fontSize: '10px' }}
+              >
+                {tick.toFixed(1)}
+              </text>
+            ))}
+
+            {/* Info */}
+            <text x="10" y="20" className="fill-slate-500" style={{ fontSize: '10px' }}>{symbol} (Zoom: {Math.round(zoom)})</text>
+
+            {granvilleEnabled && (
+              <text x="10" y="35" className="fill-yellow-500" style={{ fontSize: '10px' }}>
+                MA{maLength}: {visibleData[visibleData.length - 1]?.maValue?.toFixed(2) || 'N/A'} (Granville Enabled)
+              </text>
+            )}
+
+          </svg>
+        </div>
+
+        {/* Right Sidebar Controls (Zoom & Price Scale) */}
+        <div className="flex flex-col gap-2 shrink-0 w-10">
+          {/* Zoom Controls */}
+          <div className="flex flex-col gap-1 bg-slate-900/50 p-1 rounded-lg border border-slate-700">
+            <button
+              onClick={() => setZoom(z => Math.max(15, z - 10))}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors"
+              title="放大 (減少K線)"
             >
-              {tick.toFixed(1)}
-            </text>
-          ))}
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setZoom(z => Math.min(300, z + 10))}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors"
+              title="縮小 (更多K線)"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+          </div>
 
-          {/* Info */}
-          <text x="10" y="20" className="fill-slate-500" style={{ fontSize: '10px' }}>{symbol} (Zoom: {Math.round(zoom)})</text>
-
-          {granvilleEnabled && (
-            <text x="10" y="35" className="fill-yellow-500" style={{ fontSize: '10px' }}>
-              MA{maLength}: {visibleData[visibleData.length - 1]?.maValue?.toFixed(2) || 'N/A'} (Granville Enabled)
-            </text>
-          )}
-
-        </svg>
+          {/* Price Scale Controls */}
+          <div className="flex flex-col gap-1 bg-slate-900/50 p-1 rounded-lg border border-slate-700">
+            <div className="text-[10px] text-center text-slate-500 mb-0.5">價格</div>
+            <button
+              onClick={() => setPriceScale(s => Math.min(s * 1.1, 5))}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors font-bold"
+              title="拉長 K 線"
+            >
+              +
+            </button>
+            <button
+              onClick={() => setPriceScale(1.0)}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-400 transition-colors"
+              title="重置"
+            >
+              1x
+            </button>
+            <button
+              onClick={() => setPriceScale(s => Math.max(s * 0.9, 0.2))}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors font-bold"
+              title="壓縮 K 線"
+            >
+              -
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

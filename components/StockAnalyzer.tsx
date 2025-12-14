@@ -261,26 +261,7 @@ export const StockAnalyzer: React.FC = () => {
           </button>
         </form>
 
-        {/* Timeframe Selector */}
-        <div className="mt-4 flex items-center gap-2">
-          <span className="text-xs text-slate-500 flex items-center gap-1"><CalendarDays className="w-3 h-3" /> 週期:</span>
-          <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
-            {(['1d', '1wk', '1mo'] as Interval[]).map((int) => (
-              <button
-                key={int}
-                onClick={() => {
-                  setInterval(int);
-                }}
-                className={`px-3 py-1 rounded text-xs font-bold transition-all ${interval === int
-                    ? 'bg-finance-accent text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-              >
-                {int === '1d' ? '日線' : int === '1wk' ? '週線' : '月線'}
-              </button>
-            ))}
-          </div>
-        </div>
+
 
         {watchlist.length > 0 && (
           <div className="mt-4">
@@ -293,8 +274,8 @@ export const StockAnalyzer: React.FC = () => {
                   <button
                     onClick={() => fetchStockData(undefined, sym)}
                     className={`text-xs px-3 py-1.5 rounded-md border flex items-center gap-1 transition-all ${displaySymbol === sym
-                        ? 'bg-finance-accent text-white border-finance-accent shadow-md shadow-blue-900/30'
-                        : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:border-slate-600'
+                      ? 'bg-finance-accent text-white border-finance-accent shadow-md shadow-blue-900/30'
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:border-slate-600'
                       }`}
                   >
                     <span className="font-mono">{sym}</span>
@@ -331,6 +312,8 @@ export const StockAnalyzer: React.FC = () => {
         <SmartChart
           data={data}
           symbol={displaySymbol}
+          interval={interval}
+          onIntervalChange={setInterval}
           onLoadMore={handleLoadMore}
           isLoadingMore={loadingMore}
         />
