@@ -196,20 +196,41 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
 
     if (min === Infinity) { min = 0; max = 100; }
 
-    const range = (max - min) || 1;
-    const paddedMin = min - (range * PADDING_TOP * priceScale);
-    const paddedMax = max + (range * PADDING_TOP * priceScale);
-    // Apply manual scaling to the view height effectively "zooming" in/out of price
-    // Actually, to zoom IN to price (make candles taller), we want smaller range.
-    // So distinct from PADDING.
-    // Let's explicitly define viewMin/viewMax center around mid point.
-    const mid = (max + min) / 2;
-    const halfRange = (range / 2) * (1 + PADDING_TOP * 2); // Default range including padding
-    const scaledHalfRange = halfRange / priceScale; // Higher scale = smaller range = Taller candles
+    const effectiveRange = (max - min) || 1;
+    // Price Scale Logic:
+    // scale 1.0 = Default fit (with standard padding)
+    // scale > 1.0 = Expand Upper Bound (add more headroom)
+    // viewMin is anchored to data min (minus padding)
 
-    const viewMin = mid - scaledHalfRange;
-    const viewMax = mid + scaledHalfRange;
+    // We want the grid steps to be consistent based on the DATA range
+    const baseStep = effectiveRange / 5;
+
+    // Calculate new view range based on scale
+    // If scale increases, we add more "steps" to the top
+    const basePadding = effectiveRange * PADDING_TOP;
+    const addedHeadroom = effectiveRange * (priceScale - 1.0); // 0 at scale 1.0
+
+    const viewMin = min - basePadding;
+    const viewMax = max + basePadding + addedHeadroom;
+
     const viewHeight = viewMax - viewMin || 1;
+
+    // Generate Ticks: Ensure we cover the full new range with the same step size
+    const ticks = [];
+    const startTick = min; // Start from data min effectively
+
+    // Add ticks going up until we cover viewMax
+    let currentTick = startTick;
+    while (currentTick <= viewMax) {
+      ticks.push(currentTick);
+      currentTick += baseStep;
+    }
+    // Add ticks going down until viewMin (if any needed below data min)
+    currentTick = startTick - baseStep;
+    while (currentTick >= viewMin) {
+      ticks.unshift(currentTick);
+      currentTick -= baseStep;
+    }
 
     const WIDTH = 1000;
     const CHART_WIDTH = WIDTH - RIGHT_AXIS_WIDTH;
@@ -228,11 +249,7 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
 
     const cWidth = (CHART_WIDTH / effectiveZoom) * 0.7;
 
-    const ticks = [];
-    const step = range / 5;
-    for (let i = 0; i <= 5; i++) {
-      ticks.push(min + (step * i));
-    }
+
 
     const highPoint = vHighIdx !== -1 ? {
       x: getX(vHighIdx) + cWidth / 2,
@@ -543,27 +560,28 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
               {mappedPoints.length > 2 ? '✓ P2' : '3. P2'}
             </span>
           </div>
+
         </div>
 
         <div className="flex items-center gap-2 md:gap-4 flex-wrap">
+          {/* Timeframe Buttons */}
+          <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+            {(['1d', '1wk', '1mo'] as Interval[]).map((int) => (
+              <button
+                key={int}
+                onClick={() => onIntervalChange(int)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${interval === int
+                  ? 'bg-finance-accent text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                  }`}
+              >
+                {int === '1d' ? '日' : int === '1wk' ? '週' : '月'}
+              </button>
+            ))}
+          </div>
+
           {/* Granville Settings */}
           <div className="relative">
-            {/* Timeframe Buttons */}
-            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 mr-2">
-              {(['1d', '1wk', '1mo'] as Interval[]).map((int) => (
-                <button
-                  key={int}
-                  onClick={() => onIntervalChange(int)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${interval === int
-                    ? 'bg-finance-accent text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                    }`}
-                >
-                  {int === '1d' ? '日' : int === '1wk' ? '週' : '月'}
-                </button>
-              ))}
-            </div>
-
             <button
               onClick={() => setShowGranvilleSettings(!showGranvilleSettings)}
               className={`flex items-center gap-1 text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border ${granvilleEnabled ? 'border-yellow-500 text-yellow-500' : 'border-slate-700 text-slate-400'}`}
@@ -703,6 +721,7 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
               <button
                 onClick={handleClear}
                 className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
+                title="清除所有標記"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -718,6 +737,160 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
           )}
         </div>
 
+        {/* Granville Settings */}
+        <div className="relative">
+          <button
+            onClick={() => setShowGranvilleSettings(!showGranvilleSettings)}
+            className={`flex items-center gap-1 text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border ${granvilleEnabled ? 'border-yellow-500 text-yellow-500' : 'border-slate-700 text-slate-400'}`}
+            title="葛蘭碧八大法則"
+          >
+            <Activity className={`w-3 h-3 ${granvilleEnabled ? 'stroke-yellow-500' : ''}`} />
+            <span className="hidden sm:inline">G-8</span>
+          </button>
+
+          {showGranvilleSettings && (
+            <div className="absolute top-8 right-0 z-30 w-56 bg-slate-800 border border-slate-600 shadow-xl rounded-lg p-3 animate-in fade-in zoom-in-95">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold text-white">葛蘭碧法則設定</span>
+                <button onClick={() => setShowGranvilleSettings(false)}><X className="w-3 h-3 text-slate-400" /></button>
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-400">啟用分析</span>
+                <div
+                  onClick={() => setGranvilleEnabled(!granvilleEnabled)}
+                  className={`w-8 h-4 rounded-full cursor-pointer relative transition-colors ${granvilleEnabled ? 'bg-yellow-500' : 'bg-slate-600'}`}
+                >
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all ${granvilleEnabled ? 'left-4.5' : 'left-0.5'}`}></div>
+                </div>
+              </div>
+              <div className="text-xs text-slate-400 mb-1">均線週期 (MA):</div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="number"
+                  value={inputMaLength}
+                  onChange={(e) => setInputMaLength(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs font-mono"
+                  min="5" max="240"
+                />
+                <span className="text-xs text-slate-500">日</span>
+              </div>
+              <button
+                onClick={applyGranvilleSettings}
+                className="w-full mt-2 bg-finance-accent hover:bg-blue-600 text-white text-xs py-1.5 rounded transition-colors flex items-center justify-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                更新繪圖
+              </button>
+              <p className="text-[9px] text-slate-500 leading-tight mt-2">
+                紅B = 突破/超賣<br />
+                綠S = 跌破/超買
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Volume Alert Settings */}
+        <div className="relative">
+          <button
+            onClick={() => setShowVolSettings(!showVolSettings)}
+            className={`flex items-center gap-1 text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border ${volAlertEnabled ? 'border-amber-500 text-amber-500' : 'border-slate-700 text-slate-400'}`}
+            title="成交量異常提醒"
+          >
+            <Zap className={`w-3 h-3 ${volAlertEnabled ? 'fill-amber-500' : ''}`} />
+            <span className="hidden sm:inline">量能高亮</span>
+          </button>
+
+          {showVolSettings && (
+            <div className="absolute top-8 right-0 z-30 w-56 bg-slate-800 border border-slate-600 shadow-xl rounded-lg p-3 animate-in fade-in zoom-in-95">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold text-white">量能異常設定</span>
+                <button onClick={() => setShowVolSettings(false)}><X className="w-3 h-3 text-slate-400" /></button>
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-400">啟用提醒</span>
+                <div
+                  onClick={() => setVolAlertEnabled(!volAlertEnabled)}
+                  className={`w-8 h-4 rounded-full cursor-pointer relative transition-colors ${volAlertEnabled ? 'bg-amber-500' : 'bg-slate-600'}`}
+                >
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all ${volAlertEnabled ? 'left-4.5' : 'left-0.5'}`}></div>
+                </div>
+              </div>
+              <div className="text-xs text-slate-400 mb-1">大於 N 日均量:</div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="number"
+                  value={inputVolMALength}
+                  onChange={(e) => setInputVolMALength(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs font-mono"
+                  min="2" max="60"
+                />
+                <span className="text-xs text-slate-500">日</span>
+              </div>
+              <button
+                onClick={applyVolSettings}
+                className="w-full mt-2 bg-finance-accent hover:bg-blue-600 text-white text-xs py-1.5 rounded transition-colors flex items-center justify-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                更新參數
+              </button>
+              <p className="text-[9px] text-slate-500 mt-2">
+                高亮顯示條件：<br />
+                成交量 &gt;= 前 N 日平均量
+              </p>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={handleResetView}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border border-slate-700"
+          title="重置視圖 (近3個月)"
+        >
+          <History className="w-3 h-3" /> <span className="hidden sm:inline">近3月</span>
+        </button>
+
+        {mappedPoints.length >= 2 && (
+          <div className="hidden sm:flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
+            <Settings2 className="w-3 h-3 text-slate-500 ml-1" />
+            {[0.382, 0.5, 0.618].map((r) => (
+              <button
+                key={r}
+                onClick={() => setFibRatio(r as any)}
+                className={`text-[10px] px-2 py-0.5 rounded ${fibRatio === r ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {mappedPoints.length > 0 && (
+            <button
+              onClick={handleUndo}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
+              title="上一步"
+            >
+              <Undo2 className="w-3 h-3" />
+            </button>
+          )}
+          {mappedPoints.length > 0 && (
+            <button
+              onClick={handleClear}
+              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        {mappedPoints.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        )}
       </div>
 
       {/* Chart Container & Right Controls */}
@@ -1089,23 +1262,23 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
           <div className="flex flex-col gap-1 bg-slate-900/50 p-1 rounded-lg border border-slate-700">
             <div className="text-[10px] text-center text-slate-500 mb-0.5">價格</div>
             <button
-              onClick={() => setPriceScale(s => Math.min(s * 1.1, 5))}
+              onClick={() => setPriceScale(s => s + 0.5)}
               className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors font-bold"
-              title="拉長 K 線"
+              title="拉長 K 線 (+Scale)"
             >
               +
             </button>
             <button
               onClick={() => setPriceScale(1.0)}
               className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-400 transition-colors"
-              title="重置"
+              title="重置 (1x)"
             >
               1x
             </button>
             <button
-              onClick={() => setPriceScale(s => Math.max(s * 0.9, 0.2))}
+              onClick={() => setPriceScale(s => Math.max(1.0, s - 0.5))}
               className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors font-bold"
-              title="壓縮 K 線"
+              title="壓縮 K 線 (-Scale)"
             >
               -
             </button>
