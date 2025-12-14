@@ -40,6 +40,9 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
   const [pinchStartDist, setPinchStartDist] = useState(0);
   const [pinchStartZoom, setPinchStartZoom] = useState(60);
 
+  // Price Scale State
+  const [priceScale, setPriceScale] = useState(1.0);
+
   // Constants
   const FUTURE_BARS = points.length === 3 ? 30 : 5;
   const PADDING_TOP = 0.15;
@@ -194,10 +197,20 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
 
     if (min === Infinity) { min = 0; max = 100; }
 
-    const priceRange = max - min;
-    const paddedMin = min - (priceRange * PADDING_TOP);
-    const paddedMax = max + (priceRange * PADDING_TOP);
-    const viewHeight = paddedMax - paddedMin || 1;
+    const range = (max - min) || 1;
+    const paddedMin = min - (range * PADDING_TOP * priceScale);
+    const paddedMax = max + (range * PADDING_TOP * priceScale);
+    // Apply manual scaling to the view height effectively "zooming" in/out of price
+    // Actually, to zoom IN to price (make candles taller), we want smaller range.
+    // So distinct from PADDING.
+    // Let's explicitly define viewMin/viewMax center around mid point.
+    const mid = (max + min) / 2;
+    const halfRange = (range / 2) * (1 + PADDING_TOP * 2); // Default range including padding
+    const scaledHalfRange = halfRange / priceScale; // Higher scale = smaller range = Taller candles
+
+    const viewMin = mid - scaledHalfRange;
+    const viewMax = mid + scaledHalfRange;
+    const viewHeight = viewMax - viewMin || 1;
 
     const WIDTH = 1000;
     const CHART_WIDTH = WIDTH - RIGHT_AXIS_WIDTH;
@@ -211,13 +224,13 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
     };
 
     const getY = (price: number) => {
-      return CHART_H - ((price - paddedMin) / viewHeight) * CHART_H;
+      return CHART_H - ((price - viewMin) / viewHeight) * CHART_H;
     };
 
     const cWidth = (CHART_WIDTH / effectiveZoom) * 0.7;
 
     const ticks = [];
-    const step = priceRange / 5;
+    const step = range / 5;
     for (let i = 0; i <= 5; i++) {
       ticks.push(min + (step * i));
     }
@@ -282,6 +295,10 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    // Prevent default page scrolling behavior if possible, though React's synthetic event might be too late for non-passive
+    // But for "page zoom", that's usually Ctrl+Wheel.
+    // User says "creates page zoom" - maybe they mean the whole container scales?
+    // Let's just adjust our state.
     const zoomSensitivity = 0.05;
     const delta = e.deltaY * zoomSensitivity;
     setZoom(prev => Math.min(Math.max(15, prev + delta), 300));
@@ -698,11 +715,45 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, onLoadMo
               </button>
             )}
           </div>
+          {mappedPoints.length > 0 && (
+            <button
+              onClick={handleClear}
+              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
+        {/* Price Scale Controls */}
+        <div className="flex flex-col gap-1 absolute right-2 top-16 z-20">
+          <button
+            onClick={() => setPriceScale(s => Math.min(s * 1.1, 5))}
+            className="w-6 h-6 flex items-center justify-center bg-slate-800 border border-slate-700 rounded text-slate-400 hover:text-white"
+            title="拉長 K 線 (價格放大)"
+          >
+            +
+          </button>
+          <button
+            onClick={() => setPriceScale(1.0)}
+            className="w-6 h-6 flex items-center justify-center bg-slate-800 border border-slate-700 rounded text-xs text-slate-400 hover:text-white"
+            title="重置價格比例"
+          >
+            1x
+          </button>
+          <button
+            onClick={() => setPriceScale(s => Math.max(s * 0.9, 0.2))}
+            className="w-6 h-6 flex items-center justify-center bg-slate-800 border border-slate-700 rounded text-slate-400 hover:text-white"
+            title="壓縮 K 線 (價格縮小)"
+          >
+            -
+          </button>
         </div>
       </div>
 
       <div
         className={`relative w-full h-[500px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden select-none shadow-2xl ${isDragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+        style={{ touchAction: 'none' }}
         onWheel={handleWheel}
         onMouseDown={startDrag}
         onTouchStart={startDrag}

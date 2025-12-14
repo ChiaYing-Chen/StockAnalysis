@@ -50,3 +50,5 @@ export interface StockInfo {
   change: number;
   changePct: number;
 }
+
+export type Interval = '1d' | '1wk' | '1mo';
