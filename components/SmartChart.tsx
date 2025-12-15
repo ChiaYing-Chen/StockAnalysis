@@ -375,7 +375,9 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
   }, [onDrag]);
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (isDragging) return;
+    // If we dragged more than a small threshold, ignore the click (prevent selection)
+    if (isDragging || Math.abs(e.clientX - dragStartX) > 5) return;
+
     if (!svgRef.current || data.length === 0) return;
 
     const rect = svgRef.current.getBoundingClientRect();
@@ -736,161 +738,6 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
             </button>
           )}
         </div>
-
-        {/* Granville Settings */}
-        <div className="relative">
-          <button
-            onClick={() => setShowGranvilleSettings(!showGranvilleSettings)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border ${granvilleEnabled ? 'border-yellow-500 text-yellow-500' : 'border-slate-700 text-slate-400'}`}
-            title="葛蘭碧八大法則"
-          >
-            <Activity className={`w-3 h-3 ${granvilleEnabled ? 'stroke-yellow-500' : ''}`} />
-            <span className="hidden sm:inline">G-8</span>
-          </button>
-
-          {showGranvilleSettings && (
-            <div className="absolute top-8 right-0 z-30 w-56 bg-slate-800 border border-slate-600 shadow-xl rounded-lg p-3 animate-in fade-in zoom-in-95">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-white">葛蘭碧法則設定</span>
-                <button onClick={() => setShowGranvilleSettings(false)}><X className="w-3 h-3 text-slate-400" /></button>
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400">啟用分析</span>
-                <div
-                  onClick={() => setGranvilleEnabled(!granvilleEnabled)}
-                  className={`w-8 h-4 rounded-full cursor-pointer relative transition-colors ${granvilleEnabled ? 'bg-yellow-500' : 'bg-slate-600'}`}
-                >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all ${granvilleEnabled ? 'left-4.5' : 'left-0.5'}`}></div>
-                </div>
-              </div>
-              <div className="text-xs text-slate-400 mb-1">均線週期 (MA):</div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="number"
-                  value={inputMaLength}
-                  onChange={(e) => setInputMaLength(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs font-mono"
-                  min="5" max="240"
-                />
-                <span className="text-xs text-slate-500">日</span>
-              </div>
-              <button
-                onClick={applyGranvilleSettings}
-                className="w-full mt-2 bg-finance-accent hover:bg-blue-600 text-white text-xs py-1.5 rounded transition-colors flex items-center justify-center gap-1"
-              >
-                <RefreshCw className="w-3 h-3" />
-                更新繪圖
-              </button>
-              <p className="text-[9px] text-slate-500 leading-tight mt-2">
-                紅B = 突破/超賣<br />
-                綠S = 跌破/超買
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Volume Alert Settings */}
-        <div className="relative">
-          <button
-            onClick={() => setShowVolSettings(!showVolSettings)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border ${volAlertEnabled ? 'border-amber-500 text-amber-500' : 'border-slate-700 text-slate-400'}`}
-            title="成交量異常提醒"
-          >
-            <Zap className={`w-3 h-3 ${volAlertEnabled ? 'fill-amber-500' : ''}`} />
-            <span className="hidden sm:inline">量能高亮</span>
-          </button>
-
-          {showVolSettings && (
-            <div className="absolute top-8 right-0 z-30 w-56 bg-slate-800 border border-slate-600 shadow-xl rounded-lg p-3 animate-in fade-in zoom-in-95">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-white">量能異常設定</span>
-                <button onClick={() => setShowVolSettings(false)}><X className="w-3 h-3 text-slate-400" /></button>
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400">啟用提醒</span>
-                <div
-                  onClick={() => setVolAlertEnabled(!volAlertEnabled)}
-                  className={`w-8 h-4 rounded-full cursor-pointer relative transition-colors ${volAlertEnabled ? 'bg-amber-500' : 'bg-slate-600'}`}
-                >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all ${volAlertEnabled ? 'left-4.5' : 'left-0.5'}`}></div>
-                </div>
-              </div>
-              <div className="text-xs text-slate-400 mb-1">大於 N 日均量:</div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="number"
-                  value={inputVolMALength}
-                  onChange={(e) => setInputVolMALength(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs font-mono"
-                  min="2" max="60"
-                />
-                <span className="text-xs text-slate-500">日</span>
-              </div>
-              <button
-                onClick={applyVolSettings}
-                className="w-full mt-2 bg-finance-accent hover:bg-blue-600 text-white text-xs py-1.5 rounded transition-colors flex items-center justify-center gap-1"
-              >
-                <RefreshCw className="w-3 h-3" />
-                更新參數
-              </button>
-              <p className="text-[9px] text-slate-500 mt-2">
-                高亮顯示條件：<br />
-                成交量 &gt;= 前 N 日平均量
-              </p>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={handleResetView}
-          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors border border-slate-700"
-          title="重置視圖 (近3個月)"
-        >
-          <History className="w-3 h-3" /> <span className="hidden sm:inline">近3月</span>
-        </button>
-
-        {mappedPoints.length >= 2 && (
-          <div className="hidden sm:flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
-            <Settings2 className="w-3 h-3 text-slate-500 ml-1" />
-            {[0.382, 0.5, 0.618].map((r) => (
-              <button
-                key={r}
-                onClick={() => setFibRatio(r as any)}
-                className={`text-[10px] px-2 py-0.5 rounded ${fibRatio === r ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          {mappedPoints.length > 0 && (
-            <button
-              onClick={handleUndo}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
-              title="上一步"
-            >
-              <Undo2 className="w-3 h-3" />
-            </button>
-          )}
-          {mappedPoints.length > 0 && (
-            <button
-              onClick={handleClear}
-              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-        {mappedPoints.length > 0 && (
-          <button
-            onClick={handleClear}
-            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition-colors"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
-        )}
       </div>
 
       {/* Chart Container & Right Controls */}
@@ -900,8 +747,14 @@ const SmartChartComponent: React.FC<SmartChartProps> = ({ data, symbol, interval
           className={`relative flex-1 h-[500px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden select-none shadow-2xl ${isDragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
           style={{ touchAction: 'none' }}
           onWheel={handleWheel}
-          onMouseDown={startDrag}
-          onTouchStart={startDrag}
+          onMouseDown={(e) => {
+            startDrag(e);
+            setIsDragging(true);
+          }}
+          onTouchStart={(e) => {
+            startDrag(e);
+            setIsDragging(true);
+          }}
         >
           {isLoadingMore && (
             <div className="absolute left-4 top-4 z-10 flex items-center gap-2 bg-slate-800 text-white text-xs px-3 py-1 rounded shadow-lg animate-pulse border border-slate-700">
